@@ -1,171 +1,180 @@
 <html>
-<meta http-equiv="Cache-Control" content="no-store" />
-<head>
-<title>Stock Quote Connector - Tutorial</title>
-<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js" type="text/javascript"></script>
-<!-- <script src="https://public.tableau.com/javascripts/api/tableauwdc-1.1.0.js" type="text/javascript"></script> -->
-<script src="js/tableauwdc-1.1.0.js" type="text/javascript"></script>
-<script type="text/javascript">
- (function() {
-    // Reddit WebDataConnector for Tableau 9.1 beta
-    // Written by Justin Dallal for Tableau hackathon
+    <meta http-equiv="Cache-Control" content="no-store" />
+    <head>
+        <title>Reddit WDC</title>
+        <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js" type="text/javascript"></script>
+        <script src="js/tableauwdc-1.1.0.js" type="text/javascript"></script>
+        <script type="text/javascript">
+         (function() {
+            // Reddit WebDataConnector for Tableau 9.1 beta
+            // Written by Justin Dallal for Tableau hackathon
 
-    // TODO:
-    //  --DONE: Implement different types of "top" dropdown - all time, hour, day, week, month, year
-    //  --DONE: Implement new, rising, controversial
-    //  --Suppert paging/multiple queries to get more than 100 items back (can be done using &after=t3_link)
-    //          See API usage for fullnames usage in using "after": https://www.reddit.com/dev/api/oauth#fullnames
-    //          Note that we are rate limited to 30 queries/minute (ideally, 1 request every 2 seconds)
-    //  --Implement textbox of how many items to retrieve
-    //  --Support multiple subreddits (could be done w/ multiple queries OR with /r/politics+pics method)
-    //  --Implement exclusions in searches to remove:   guilded posts, NSFW posts, stickied posts
- 
-    var myConnector = tableau.makeConnector();
+            // TODO:
+            //  --DONE: Implement different types of "top" dropdown - all time, hour, day, week, month, year
+            //  --DONE: Implement new, rising, controversial
+            //  --DONE: Suppert paging/multiple queries to get more than 100 items back (can be done using &after=t3_link)
+            //          See API usage for fullnames usage in using "after": https://www.reddit.com/dev/api/oauth#fullnames
+            //          Note that we are rate limited to 30 queries/minute (ideally, 1 request every 2 seconds)
+            //  --DONE: Implement dropdown of how many items to retrieve
+            //  --Do testing to determine how many results we can retrieve on average without hitting rate limits
+            //    See here:  https://github.com/reddit/reddit/wiki/API                    
+            //  --Move resultsCompleted to use connectionData and remove that god awful global variable
+            //  --Implement incremental loading of data to get >3000 results
+            //  --DONE: Support multiple subreddits (could be done w/ multiple queries OR with /r/politics+pics method)
+            //  --DONE (NSFW): Implement exclusions in searches to remove:   guilded posts, NSFW posts, stickied posts
+         
+            var myConnector = tableau.makeConnector();
 
-    // Note that, even though the API supports upvotes/downvotes, up just means score and down is always 0.
-    // see the announcement here:   https://www.reddit.com/r/announcements/comments/28hjga/reddit_changes_individual_updown_vote_counts_no/
-    myConnector.getColumnHeaders = function() {
-	    var fieldNames = ['Title',  'Score',    'Comment Count', 'ID',      'URL',   'Domain', 'Created',        'Flair Text', 'Author'];
-	    var fieldTypes = ['string', 'int',  'int',           'string',  'string',   'string', 'datetime',       'string',    'string'];
-	    tableau.headersCallback(fieldNames, fieldTypes);
-    };
-     
-    function buildURLAndSortingOptions(sortingOption, afterID, count)
-    {
-        var urlToParse = 'http://www.reddit.com/r/' + tableau.connectionData;
-        var modifiers = "";
-        var sortingOption = $("#sorting").val();
-        var queryOptions = {limit: 100};
-
-        switch(sortingOption)
-        {
-            case "":
-            	break;
-            case "hot":
-            	modifiers += "/hot";
-            	break;
-            case "controversial":
-            	modifiers += "/controversial";
-            	break;
-            case "new":
-            	modifiers += "/new";
-            	break;
-            default:
-	            modifiers += "/top";
-	            queryOptions['t'] = sortingOption;
-        }
-
-
-        if(afterID != "")
-        {
-            queryOptions["after"] = afterID;
-            queryOptions["count"] = count;
-        }
-
-        urlToParse += modifiers + '/.json?jsonp=?';
-        return {"url": urlToParse, "options": queryOptions}
-    }
-
-    var resultsCompleted;
-
-    function getJSON(queryURL, queryOptions)
-    {
-        $.getJSON(queryURL, queryOptions, function(rd)
-        {
-        	var results = [];
-            $.each(rd.data.children, function(k, v)
+            // Note that, even though the API supports upvotes/downvotes, up just means score and down is always 0.
+            // see the announcement here:   https://www.reddit.com/r/announcements/comments/28hjga/reddit_changes_individual_updown_vote_counts_no/
+            myConnector.getColumnHeaders = function() {
+        	    var fieldNames = ['Title',  'Score',    'Comment Count', 'ID',      'URL',   'Domain', 'Created',       'Flair Text', 'Author', 'NSFW', 'Kind'];
+        	    var fieldTypes = ['string', 'int',  'int',           'string',  'string',   'string', 'datetime',       'string',     'string', 'bool', 'string'];
+        	    tableau.headersCallback(fieldNames, fieldTypes);
+            };
+             
+            function buildURLAndSortingOptions(subReddit, sortingOption, afterID, count)
             {
-                var entry = {
-                    'Title': v.data.title,
-                    'Score': v.data.score,
-                    'Comment Count': v.data.num_comments,
-                    'ID': v.data.id,
-                    'URL': v.data.url,
-                    'Domain': v.data.domain,
-                    'Created': v.data.created_utc,
-                    'Flair Text': v.data.link_flair_text,
-                    'Author': v.data.author
-                };
-                results.push(entry);
+                var urlToParse = 'http://www.reddit.com/r/' + subReddit;
+                var modifiers = "";
+                var queryOptions = {limit: 100};
+
+                switch(sortingOption)
+                {
+                    case "":
+                    	break;
+                    case "hot":
+                    	modifiers += "/hot";
+                    	break;
+                    case "controversial":
+                    	modifiers += "/controversial";
+                    	break;
+                    case "new":
+                    	modifiers += "/new";
+                    	break;
+                    default:
+        	            modifiers += "/top";
+        	            queryOptions['t'] = sortingOption;
+                }
+
+                if(afterID != "")
+                {
+                    queryOptions["after"] = afterID;
+                    queryOptions["count"] = count;
+                }
+
+                urlToParse += modifiers + '/.json?jsonp=?';
+                return {"url": urlToParse, "options": queryOptions}
+            }
+
+            var resultsCompleted = 0; // stupid ugly hack.  I'm not proud of this.  
+
+            function getJSON(queryURL, queryOptions, moreResults, disableNSFW)
+            {
+                $.getJSON(queryURL, queryOptions, function(rd)
+                {
+                	var results = [];
+
+                    $.each(rd.data.children, function(k, v)
+                    {
+                        if(v.data.over_18 && disableNSFW)
+                            return;
+
+                        var entry = {
+                            'Title': v.data.title,
+                            'Score': v.data.score,
+                            'Comment Count': v.data.num_comments,
+                            'ID': v.data.id,
+                            'URL': v.data.url,
+                            'Domain': v.data.domain,
+                            'Created': v.data.created_utc,
+                            'Flair Text': v.data.link_flair_text,
+                            'Author': v.data.author,
+                            'NSFW': v.data.over_18,
+                            'Kind': v.data.kind,
+                        };
+                        results.push(entry);
+                    });
+
+                    if(results.length > 0)
+                        tableau.dataCallback(results, results[results.length - 1]['Kind'] + '_' + results[results.length - 1]['ID'], moreResults);
+                });        
+            }
+
+            myConnector.getTableData = function(lastRecordToken) 
+            {
+                var connectionData = JSON.parse(tableau.connectionData);
+                var numPosts = connectionData["resultsRequested"];
+                var query = buildURLAndSortingOptions(connectionData["subreddit"], connectionData["sortingTyle"], lastRecordToken, resultsCompleted);
+                resultsCompleted += 100;
+
+                getJSON(query["url"], query["options"], numPosts - resultsCompleted > 0, connectionData["disableNSFW"]);
+            };
+
+            myConnector.setSubReddit = function(subreddit, sortingType, resultsRequested, disableNSFW) 
+            {
+                // We are using tableau.connectionData to pass information around and maintain context without worrying about scope
+                var connectionData = {"subreddit": subreddit, "sortingType": sortingType, "resultsRequested": resultsRequested, "disableNSFW": disableNSFW};
+                tableau.connectionData = JSON.stringify(connectionData); 
+                tableau.connectionName = 'Subreddit Data: ' + subreddit;
+            };
+
+            tableau.registerConnector(myConnector);
+
+            $(document).ready(function() 
+            {
+                $("#submitButton").click(function() 
+                {
+                    var resultsRequested = parseInt($("#postCount").val(), 10);
+                    var sortingType = $("#sorting").val()
+                    var subreddit = $('#subredditName').val().trim();
+                    var disableNSFW = $('#nsfw')[0].checked;
+                    if (subreddit) 
+                    {
+                        myConnector.setSubReddit(subreddit, sortingType, resultsRequested, disableNSFW);
+                        tableau.submit();
+                    }
+                });
             });
 
-            lastID = "t3_" + results[results.length - 1]['ID'];
-            console.log(lastID);
-			resultsCompleted += 100;            
-            if(resultsCompleted >= parseInt($("#postCount").val(), 10))
-            {
-            	tableau.dataCallback(results, lastID, false);
-            }
-            else
-            {
-            	tableau.dataCallback(results, lastID, true);
-            }
-        });        
-    }
+        })();
+        </script>
+    </head>
 
-    myConnector.getTableData = function(lastRecordToken) 
-    {
-        var numPosts = parseInt($("#postCount").val(), 10);
-        console.log("Going for 100 results with last id = " + lastRecordToken + " and have done " + resultsCompleted);
-        var query = buildURLAndSortingOptions($("#sorting").val(), lastRecordToken, numPosts - resultsCompleted);
-        getJSON(query["url"], query["options"], numPosts);
-    };
+    <body>
+        <form>
+            <p>Subreddit Data Grabber.</p>
+            
+            Input subreddit name(s): 
+            <input type="text" style="width: 500px;" id="subredditName" value="Examples: aww, pics+videos"/> 
+            <br />
+            <br />
+            Sorting: 
+            <select id="sorting">
+                <option value="hot">Hot</option>
+                <option value="controversial">Controversial</option>
+                <option value="new">New</option>
+                <option value="hour">Top of this hour</option>
+                <option value="day">Top of the last 24h</option>
+                <option value="year">Top of the last year</option>
+                <option value="all">Top of all time</option>
+            </select>
+            <br/>
 
-    myConnector.setSubReddit = function(subreddit) 
-    {
-        tableau.connectionData = subreddit; // set the ticker symbol as the connection data so we can get to it when we fetch the data
-        tableau.connectionName = 'Subreddit Data: ' + subreddit; // name the data source. This will be the data source name in Tableau
-    };
+            Number of posts
+            <select id="postCount">
+                <option value="100">100</option>
+                <option value="300">300</option>
+                <option value="500">500</option>
+                <option value="1000">1000</option>
+                <option value="2000">2000</option>
+            </select>
+            <br />
+            Disable NSFW posts <input type="checkbox" id="nsfw"/>
+            <br />
+            <br />
 
-    tableau.registerConnector(myConnector);
-
-    $(document).ready(function() 
-    {
-        $("#submitButton").click(function() 
-        {
-        	resultsCompleted = 0;
-            var subreddit = $('#subredditName').val().trim();
-            if (subreddit) 
-            {
-                myConnector.setSubReddit(subreddit);
-                tableau.submit();
-            }
-        });
-    });
-
-})();
-</script>
-</head>
-<body>
-    <p>Subreddit Data Grabber.</p>
-    Input subreddit: 
-    <input type="text" style="width: 150px;" id="subredditName" value="Place subreddit here (multiple subreddits with + operator e.g. pics+aww"/> 
-    <br />
-    
-    Sorting: 
-    <select id="sorting">
-    <option value="hot">Hot</option>
-    <option value="controversial">Controversial</option>
-    <option value="new">New</option>
-    <option value="hour">Top of this hour</option>
-    <option value="day">Top of the last 24h</option>
-    <option value="year">Top of the last year</option>
-    <option value="all">Top of all time</option>
-    </select>
-    
-    <br/>
-    Number of posts
-    <select id="postCount">
-    <option value="100">100</option>
-    <option value="200">200</option>
-    <option value="300">300</option>
-    <option value="400">400</option>
-    <option value="500">500</option>
-    <option value="1000">1000</option>
-    </select>
-
-
-    <br /><br />
-    <button type="button" id="submitButton">Get Subreddit Data</button> 
-</body>
+            <button type="button" id="submitButton">Get Subreddit Data</button> 
+        </form>
+    </body>
 </html>
