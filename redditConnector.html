@@ -3,10 +3,10 @@
     <head>
         <title>Reddit WDC</title>
         <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js" type="text/javascript"></script>
-        <script src="js/tableauwdc-1.1.0.js" type="text/javascript"></script>
+        <script src="https://online.tableau.com/javascripts/api/tableauwdc-1.1.0.js"; type="text/javascript"></script>
         <script type="text/javascript">
          (function() {
-            // Reddit WebDataConnector for Tableau 9.1 beta
+            // Reddit WebDataConnector for Tableau
             // Written by Justin Dallal for Tableau hackathon
 
             // TODO:
@@ -16,12 +16,14 @@
             //          See API usage for fullnames usage in using "after": https://www.reddit.com/dev/api/oauth#fullnames
             //          Note that we are rate limited to 30 queries/minute (ideally, 1 request every 2 seconds)
             //  --DONE: Implement dropdown of how many items to retrieve
-            //  --Do testing to determine how many results we can retrieve on average without hitting rate limits
+            //  --DONE: Do testing to determine how many results we can retrieve on average without hitting rate limits
             //    See here:  https://github.com/reddit/reddit/wiki/API                    
             //  --Move resultsCompleted to use connectionData and remove that god awful global variable
             //  --Implement incremental loading of data to get >3000 results
             //  --DONE: Support multiple subreddits (could be done w/ multiple queries OR with /r/politics+pics method)
             //  --DONE (NSFW): Implement exclusions in searches to remove:   guilded posts, NSFW posts, stickied posts
+            //  --DONE: Support proper Tableau dates.
+
          
             var myConnector = tableau.makeConnector();
 
@@ -80,6 +82,8 @@
                         if(v.data.over_18 && disableNSFW)
                             return;
 
+                        var d = new Date(parseInt(v.data.created) * 1000);
+
                         var entry = {
                             'Title': v.data.title,
                             'Score': v.data.score,
@@ -87,17 +91,18 @@
                             'ID': v.data.id,
                             'URL': v.data.url,
                             'Domain': v.data.domain,
-                            'Created': v.data.created_utc,
+                            'Created': d.getFullYear() + "/" + d.getMonth() + "/" + d.getDate();,
                             'Flair Text': v.data.link_flair_text,
                             'Author': v.data.author,
                             'NSFW': v.data.over_18,
                             'Kind': v.data.kind,
                         };
+
                         results.push(entry);
                     });
 
                     if(results.length > 0)
-                        tableau.dataCallback(results, results[results.length - 1]['Kind'] + '_' + results[results.length - 1]['ID'], moreResults);
+                        tableau.dataCallback(results, 't3_' + results[results.length - 1]['ID'], moreResults);
                 });        
             }
 
@@ -146,7 +151,7 @@
             <p>Subreddit Data Grabber.</p>
             
             Input subreddit name(s): 
-            <input type="text" style="width: 500px;" id="subredditName" value="Examples: aww, pics+videos"/> 
+            <input type="text" style="width: 500px;" id="subredditName" value="Examples: aww, pics+videos"/>
             <br />
             <br />
             Sorting: 
@@ -168,6 +173,7 @@
                 <option value="500">500</option>
                 <option value="1000">1000</option>
                 <option value="2000">2000</option>
+                <option value="3000">3000</option>
             </select>
             <br />
             Disable NSFW posts <input type="checkbox" id="nsfw"/>
