@@ -40,7 +40,6 @@
                 var urlToParse = 'http://www.reddit.com/r/' + subReddit;
                 var modifiers = "";
                 var queryOptions = {limit: 100};
-
                 switch(sortingOption)
                 {
                     case "":
@@ -91,7 +90,7 @@
                             'ID': v.data.id,
                             'URL': v.data.url,
                             'Domain': v.data.domain,
-                            'Created': d.getFullYear() + "/" + d.getMonth() + "/" + d.getDate();,
+                            'Created': (d.getFullYear() + "/" + d.getMonth() + "/" + d.getDate()),
                             'Flair Text': v.data.link_flair_text,
                             'Author': v.data.author,
                             'NSFW': v.data.over_18,
@@ -110,9 +109,8 @@
             {
                 var connectionData = JSON.parse(tableau.connectionData);
                 var numPosts = connectionData["resultsRequested"];
-                var query = buildURLAndSortingOptions(connectionData["subreddit"], connectionData["sortingTyle"], lastRecordToken, resultsCompleted);
+                var query = buildURLAndSortingOptions(connectionData["subreddit"], connectionData["sortingType"], lastRecordToken, resultsCompleted);
                 resultsCompleted += 100;
-
                 getJSON(query["url"], query["options"], numPosts - resultsCompleted > 0, connectionData["disableNSFW"]);
             };
 
@@ -172,8 +170,6 @@
                 <option value="300">300</option>
                 <option value="500">500</option>
                 <option value="1000">1000</option>
-                <option value="2000">2000</option>
-                <option value="3000">3000</option>
             </select>
             <br />
             Disable NSFW posts <input type="checkbox" id="nsfw"/>
